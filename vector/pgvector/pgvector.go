@@ -195,3 +195,26 @@ func (s *Store) Query(ctx context.Context, embedding []float32, topK int) ([]vec
 
 	return results, rows.Err()
 }
+
+func (s *Store) Delete(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	_, err := s.pool.Exec(ctx, `delete from documents where id = ANY($1)`, ids)
+	return err
+}
+
+func (s *Store) DeleteBySource(ctx context.Context, source string) error {
+	if source == "" {
+		return nil
+	}
+
+	_, err := s.pool.Exec(ctx, `delete from documents where metadata->>'source' = $1`, source)
+	return err
+}
+
+func (s *Store) Close() error {
+	s.pool.Close()
+	return nil
+}
