@@ -62,7 +62,7 @@ func RunREPL(ctx context.Context, client *llm.Client, opts Options) error {
 		fmt.Println()
 
 		if err != nil {
-			fmt.Println(os.Stderr, "error: ", err)
+			fmt.Fprintln(os.Stderr, "error: ", err)
 			history = history[:len(history)-1]
 			continue
 		}
@@ -95,7 +95,7 @@ func startSpinner(label string) *spinner {
 		for {
 			select {
 			case <-s.stop:
-				fmt.Print("\r\033[K]")
+				fmt.Print("\r\033[K")
 				return
 			case <-t.C:
 				fmt.Printf("\r%s %s", frames[i%len(frames)], label)
