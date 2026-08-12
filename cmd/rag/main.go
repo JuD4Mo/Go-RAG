@@ -18,7 +18,7 @@ func main() {
 	defer stop()
 
 	if err := app.Run(ctx, config.Load()); err != nil {
-		fmt.Println(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

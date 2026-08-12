@@ -81,7 +81,7 @@ func (s *Store) migrate(ctx context.Context, dim int) error {
 		content TEXT NOT NULL,
 		metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
 		embedding vector(%d) NOT NULL,
-		created_at TIMESTAMPZ NOT NULL DEFAULT now())`, dim),
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now())`, dim),
 		`CREATE INDEX IF NOT EXISTS documents_embedding_idx
 			ON documents USING hnsw (embedding vector_cosine_ops)`,
 	}
