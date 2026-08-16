@@ -54,3 +54,5 @@ db-data/
 # Misc
 /tmp/
 *.lock
+
+*.txt
