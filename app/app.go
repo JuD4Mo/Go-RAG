@@ -4,22 +4,45 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/JuD4Mo/rag-course/chat"
 	"github.com/JuD4Mo/rag-course/config"
+	"github.com/JuD4Mo/rag-course/ingest"
 	"github.com/JuD4Mo/rag-course/llm"
 	"github.com/JuD4Mo/rag-course/vector"
 	"github.com/JuD4Mo/rag-course/vector/pgvector"
 )
 
-func Run(ctx context.Context, cfg config.Config) error {
+func Run(parent context.Context, cfg config.Config) error {
 	logger := log.New(os.Stderr, "[rag] ", log.LstdFlags)
 
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+
 	client := llm.New(cfg)
+
+	embedder := llm.NewEmbedder(cfg)
 
 	store, err := openStore(ctx, cfg)
 	if err != nil {
 		logger.Printf("vector store disabled: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	if store != nil {
+		wg.Go(func() {
+			opts := ingest.Options{
+				SourceDir:    cfg.IngestDir,
+				ProcessedDir: cfg.ProcessedDir,
+			}
+
+			if err := ingest.Watch(ctx, opts, embedder, store, logger); err != nil && ctx.Err() == nil {
+				logger.Printf("watcher stopped: %v", err)
+			}
+		})
+
+		logger.Printf("watching %s for new documents", cfg.IngestDir)
 	}
 
 	if store != nil {
@@ -27,9 +50,13 @@ func Run(ctx context.Context, cfg config.Config) error {
 		logger.Printf("vector store ready")
 	}
 
-	return chat.RunREPL(ctx, client, chat.Options{
+	replErr := chat.RunREPL(ctx, client, chat.Options{
 		SystemPromptFile: cfg.SystemPromptFile,
 	})
+
+	cancel()
+	wg.Wait()
+	return replErr
 }
 
 func openStore(ctx context.Context, cfg config.Config) (vector.Store, error) {
