@@ -10,6 +10,7 @@ import (
 	"github.com/JuD4Mo/rag-course/config"
 	"github.com/JuD4Mo/rag-course/ingest"
 	"github.com/JuD4Mo/rag-course/llm"
+	"github.com/JuD4Mo/rag-course/rag"
 	"github.com/JuD4Mo/rag-course/vector"
 	"github.com/JuD4Mo/rag-course/vector/pgvector"
 )
@@ -50,7 +51,15 @@ func Run(parent context.Context, cfg config.Config) error {
 		logger.Printf("vector store ready")
 	}
 
-	replErr := chat.RunREPL(ctx, client, chat.Options{
+	var retriever *rag.Retriever
+	if store != nil {
+		retriever = rag.New(embedder, store, rag.Options{
+			Topk:     5,
+			Rewriter: rag.NewRewriter(client),
+		})
+	}
+
+	replErr := chat.RunREPL(ctx, client, retriever, chat.Options{
 		SystemPromptFile: cfg.SystemPromptFile,
 	})
 
