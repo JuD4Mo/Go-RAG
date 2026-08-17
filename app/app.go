@@ -13,6 +13,7 @@ import (
 	"github.com/JuD4Mo/rag-course/rag"
 	"github.com/JuD4Mo/rag-course/vector"
 	"github.com/JuD4Mo/rag-course/vector/pgvector"
+	"github.com/JuD4Mo/rag-course/web"
 )
 
 func Run(parent context.Context, cfg config.Config) error {
@@ -57,6 +58,28 @@ func Run(parent context.Context, cfg config.Config) error {
 			Topk:     5,
 			Rewriter: rag.NewRewriter(client),
 		})
+	}
+
+	if cfg.HTTPAddr != "" {
+		srv, err := web.New(client, embedder, retriever, web.Options{
+			Addr:             cfg.HTTPAddr,
+			SystemPromptFile: cfg.SystemPromptFile,
+			Store:            store,
+			ProcessedDir:     cfg.ProcessedDir,
+			ImagesDir:        cfg.ImageDir,
+		})
+
+		if err != nil {
+			logger.Printf("web server disabled: %v", err)
+		} else {
+			wg.Go(func() {
+				if err := srv.Run(ctx, cfg.HTTPAddr); err != nil && ctx.Err() == nil {
+					logger.Printf("web server stopped: %v", err)
+				}
+			})
+
+			logger.Printf("web chat at http://localhost%s/chat", cfg.HTTPAddr)
+		}
 	}
 
 	replErr := chat.RunREPL(ctx, client, retriever, chat.Options{

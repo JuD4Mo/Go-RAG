@@ -48,7 +48,7 @@ func Watch(ctx context.Context, opts Options, embedder llm.Embedder, store vecto
 	}
 
 	handle := func(path string) {
-		if err := processOne(ctx, path, opts, embedder, store); err != nil {
+		if err := ProcessOne(ctx, path, opts, embedder, store); err != nil {
 			logger.Printf("process %s: %v", filepath.Base(path), err)
 			return
 		}
