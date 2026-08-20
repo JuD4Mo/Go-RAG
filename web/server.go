@@ -98,7 +98,7 @@ func (s *Server) Routes() http.Handler {
 	if s.imagesDir != "" {
 		r.Post("/api/upload/image", s.handleUploadImage)
 		fs := http.FileServer(http.Dir(s.imagesDir))
-		r.Handle("/images/*", http.StripPrefix("images", fs))
+		r.Handle("/images/*", http.StripPrefix("/images/", fs))
 	}
 
 	return r
