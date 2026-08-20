@@ -7,13 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/JuD4Mo/rag-course/ingest"
 	"github.com/JuD4Mo/rag-course/llm"
 	"github.com/JuD4Mo/rag-course/rag"
 	"github.com/JuD4Mo/rag-course/vector"
@@ -23,6 +26,14 @@ import (
 
 //go:embed templates/*.gohtml
 var templatesFS embed.FS
+
+const maxUploadBytes = 10 << 20
+
+type uploadResponse struct {
+	Source string `json:"source"`
+	Bytes  int    `json:"bytes"`
+	Chunks int    `json:"chunks"`
+}
 
 type Options struct {
 	Addr             string
@@ -75,12 +86,71 @@ func (s *Server) Routes() http.Handler {
 
 	r.Get("/chat", s.handleChatPage)
 	r.Post("/api/chat/stream", s.handleChatStream)
+	r.Post("/api/upload", s.handleUpload)
 
 	return r
 }
 
 type chatRequest struct {
 	Messages []llm.Message `json:"messages"`
+}
+
+func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		http.Error(w, "ingest is not configured (no vector store)", http.StatusServiceUnavailable)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+
+	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
+		http.Error(w, "upload too large or malformed: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "missing 'file' field: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	defer file.Close()
+
+	name := filepath.Base(header.Filename)
+	if !ingest.IsSupported(name) {
+		http.Error(w, "unsupported format", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "read upload: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	chunks, err := ingest.ProcessContent(r.Context(), name, content, ingest.Options{}, s.embedder, s.store)
+	if err != nil {
+		log.Printf("[web] upload ingest failed for %q: %v", name, err)
+		http.Error(w, "ingest failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if s.processedDir != "" {
+		dst := filepath.Join(s.processedDir, name)
+		if err := os.MkdirAll(s.processedDir, 0o755); err != nil {
+			log.Printf("[web] mkdir %s: %v", s.processedDir, err)
+		} else if err := os.WriteFile(dst, content, 0o644); err != nil {
+			log.Printf("[web] archive %s: %v", dst, err)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(uploadResponse{
+		Source: name,
+		Bytes:  len(content),
+		Chunks: chunks,
+	})
+
 }
 
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {

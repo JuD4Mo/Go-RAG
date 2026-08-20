@@ -56,3 +56,5 @@ db-data/
 *.lock
 
 *.txt
+*.md
+!**/README.md
