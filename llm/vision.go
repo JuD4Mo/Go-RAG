@@ -17,7 +17,7 @@ func (c *Client) HasVision() bool {
 }
 
 func (c *Client) DescribeImage(ctx context.Context, mime string, image []byte) (string, error) {
-	if c.cfg.VisionModel != "" {
+	if c.cfg.VisionModel == "" {
 		return "", errors.New("no vision model configured")
 	}
 
